@@ -3,7 +3,7 @@ import { EXERCISE_TYPE_ICONS } from '@/constants/exerciseIcons';
 import type { ThemeColors } from '@/theme/colors';
 import type { Exercise } from '@/types/exercise';
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -29,7 +29,6 @@ export function ExerciseSquare({
     onDragCancel,
     isBeingDragged = false,
 }: Props) {
-    // Refs с актуальными колбэками — gesture создаётся один раз и не видит новые пропсы
     const onPressRef = useRef(onPress);
     const onDragStartRef = useRef(onDragStart);
     const onDragMoveRef = useRef(onDragMove);
@@ -37,12 +36,15 @@ export function ExerciseSquare({
     const onDragCancelRef = useRef(onDragCancel);
     const exerciseRef = useRef(exercise);
 
-    onPressRef.current = onPress;
-    onDragStartRef.current = onDragStart;
-    onDragMoveRef.current = onDragMove;
-    onDragEndRef.current = onDragEnd;
-    onDragCancelRef.current = onDragCancel;
-    exerciseRef.current = exercise;
+    // Обновляем refs после рендера — так требует Reanimated
+    useEffect(() => {
+        onPressRef.current = onPress;
+        onDragStartRef.current = onDragStart;
+        onDragMoveRef.current = onDragMove;
+        onDragEndRef.current = onDragEnd;
+        onDragCancelRef.current = onDragCancel;
+        exerciseRef.current = exercise;
+    });
 
     const gesture = useMemo(() => {
         const longPress = Gesture.LongPress()
@@ -52,7 +54,7 @@ export function ExerciseSquare({
                 runOnJS(onDragStartRef.current)(
                     exerciseRef.current,
                     e.absoluteX,
-                    e.absoluteY
+                    e.absoluteY,
                 );
             });
 
@@ -75,7 +77,7 @@ export function ExerciseSquare({
             });
 
         return Gesture.Race(Gesture.Exclusive(longPress, pan), tap);
-    }, []); // ← пустой массив зависимостей! gesture создаётся один раз
+    }, []);
 
     return (
         <GestureDetector gesture={gesture}>

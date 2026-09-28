@@ -1,5 +1,5 @@
 // src/hooks/useDragDrop.ts
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 export interface DropZoneBounds {
@@ -25,6 +25,10 @@ export function useDragDrop<T extends { id: number }>({
 
     // Ref — актуальный onDrop (родитель может передавать новую функцию)
     const onDropRef = useRef(onDrop);
+
+    useEffect(() => {
+        onDropRef.current = onDrop;
+    }, [onDrop]);
     onDropRef.current = onDrop;
 
     const ghostX = useSharedValue(0);
@@ -38,7 +42,7 @@ export function useDragDrop<T extends { id: number }>({
             ghostX.value = pageX - ghostOffset.x;
             ghostY.value = pageY - ghostOffset.y;
         },
-        [ghostX, ghostY, ghostOffset.x, ghostOffset.y]
+        [ghostX, ghostY, ghostOffset.x, ghostOffset.y],
     );
 
     const moveDrag = useCallback(
@@ -46,7 +50,7 @@ export function useDragDrop<T extends { id: number }>({
             ghostX.value = pageX - ghostOffset.x;
             ghostY.value = pageY - ghostOffset.y;
         },
-        [ghostX, ghostY, ghostOffset.x, ghostOffset.y]
+        [ghostX, ghostY, ghostOffset.x, ghostOffset.y],
     );
 
     const endDrag = useCallback(
@@ -67,7 +71,7 @@ export function useDragDrop<T extends { id: number }>({
             draggingRef.current = null;
             setDragging(null);
         },
-        [dropZoneBounds]
+        [dropZoneBounds],
     );
 
     const cancelDrag = useCallback(() => {
@@ -79,7 +83,7 @@ export function useDragDrop<T extends { id: number }>({
         (bounds: DropZoneBounds) => {
             dropZoneBounds.value = bounds;
         },
-        [dropZoneBounds]
+        [dropZoneBounds],
     );
 
     const ghostStyle = useAnimatedStyle(() => ({

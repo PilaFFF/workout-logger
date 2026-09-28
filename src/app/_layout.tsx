@@ -1,5 +1,6 @@
 // src/app/_layout.tsx
 import { DataVersionProvider } from '@/context/DataVersionContext';
+import { WorkoutsVersionProvider } from '@/context/WorkoutsVersionContext';
 import { initializeDatabase } from '@/db/init';
 import { ThemeProvider } from '@/theme/ThemeContext';
 import { Stack } from 'expo-router';
@@ -16,7 +17,7 @@ export default function RootLayout() {
         initializeDatabase()
             .then(() => setDbReady(true))
             .catch((e) =>
-                setDbError(e instanceof Error ? e.message : 'DB error')
+                setDbError(e instanceof Error ? e.message : 'DB error'),
             );
     }, []);
 
@@ -54,7 +55,9 @@ export default function RootLayout() {
             <SafeAreaProvider>
                 <ThemeProvider>
                     <DataVersionProvider>
-                        <Stack screenOptions={{ headerShown: false }} />
+                        <WorkoutsVersionProvider>
+                            <Stack screenOptions={{ headerShown: false }} />
+                        </WorkoutsVersionProvider>
                     </DataVersionProvider>
                 </ThemeProvider>
             </SafeAreaProvider>

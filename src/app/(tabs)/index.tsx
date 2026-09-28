@@ -18,6 +18,7 @@ import type { Exercise } from '@/types/exercise';
 import { resolveDraft, type ResolvedDraftExercise } from '@/utils/resolveDraft';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo, useRef } from 'react';
+
 import {
     Alert,
     ScrollView,
@@ -38,7 +39,7 @@ export default function WorkoutScreen() {
 
     const resolvedDraft = useMemo(
         () => resolveDraft(draft.draft, exercises),
-        [draft.draft, exercises]
+        [draft.draft, exercises],
     );
 
     const addAndOpen = useCallback(
@@ -46,7 +47,7 @@ export default function WorkoutScreen() {
             draft.addExercise(exerciseId);
             sheetRef.current?.open(exerciseId);
         },
-        [draft]
+        [draft],
     );
 
     const dnd = useDragDrop<Exercise>({
@@ -55,7 +56,7 @@ export default function WorkoutScreen() {
 
     const handlePress = useCallback(
         (exercise: Exercise) => addAndOpen(exercise.id),
-        [addAndOpen]
+        [addAndOpen],
     );
 
     const handleCardPress = useCallback((exercise: ResolvedDraftExercise) => {
@@ -66,7 +67,7 @@ export default function WorkoutScreen() {
         if (draft.draft.length === 0) {
             Alert.alert(
                 'Пусто',
-                'Добавь хотя бы одно упражнение, прежде чем завершить тренировку'
+                'Добавь хотя бы одно упражнение, прежде чем завершить тренировку',
             );
             return;
         }
@@ -94,11 +95,11 @@ export default function WorkoutScreen() {
             } catch (e) {
                 Alert.alert(
                     'Ошибка',
-                    e instanceof Error ? e.message : 'Не удалось сохранить'
+                    e instanceof Error ? e.message : 'Не удалось сохранить',
                 );
             }
         },
-        [draft, bumpWorkouts]
+        [draft, bumpWorkouts],
     );
 
     const isDragging = dnd.dragging !== null;

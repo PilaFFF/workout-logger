@@ -52,8 +52,9 @@ export const SetsSheet = forwardRef<SetsSheetRef, Props>(
 
         return (
             <BottomSheet
-                ref={sheetRef}
+                key={openId}
                 snapPoints={['60%', '90%']}
+                index={0}
                 enablePanDownToClose
                 onClose={() => setOpenId(null)}
                 backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
