@@ -12,8 +12,6 @@ const createEmptySet = (): SetEntry => ({
 });
 
 export function useWorkoutDraft() {
-    const [workoutName, setWorkoutName] = useState('');
-    const [date, setDate] = useState(() => new Date().toISOString());
     const [draft, setDraft] = useState<DraftExercise[]>([]);
 
     const addExercise = useCallback((exerciseId: number) => {
@@ -35,8 +33,8 @@ export function useWorkoutDraft() {
             prev.map((d) =>
                 d.exercise_id === exerciseId
                     ? { ...d, sets: [...d.sets, createEmptySet()] }
-                    : d,
-            ),
+                    : d
+            )
         );
     }, []);
 
@@ -44,7 +42,7 @@ export function useWorkoutDraft() {
         (
             exerciseId: number,
             setId: string,
-            patch: Partial<Omit<SetEntry, 'id'>>,
+            patch: Partial<Omit<SetEntry, 'id'>>
         ) => {
             setDraft((prev) =>
                 prev.map((d) =>
@@ -52,14 +50,14 @@ export function useWorkoutDraft() {
                         ? {
                               ...d,
                               sets: d.sets.map((s) =>
-                                  s.id === setId ? { ...s, ...patch } : s,
+                                  s.id === setId ? { ...s, ...patch } : s
                               ),
                           }
-                        : d,
-                ),
+                        : d
+                )
             );
         },
-        [],
+        []
     );
 
     const removeSet = useCallback((exerciseId: number, setId: string) => {
@@ -67,22 +65,14 @@ export function useWorkoutDraft() {
             prev.map((d) =>
                 d.exercise_id === exerciseId
                     ? { ...d, sets: d.sets.filter((s) => s.id !== setId) }
-                    : d,
-            ),
+                    : d
+            )
         );
     }, []);
 
-    const reset = useCallback(() => {
-        setWorkoutName('');
-        setDate(new Date().toISOString());
-        setDraft([]);
-    }, []);
+    const reset = useCallback(() => setDraft([]), []);
 
     return {
-        workoutName,
-        setWorkoutName,
-        date,
-        setDate,
         draft,
         addExercise,
         removeExercise,

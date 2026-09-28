@@ -1,5 +1,5 @@
 // src/app/_layout.tsx
-import { ExercisesVersionProvider } from '@/context/ExercisesVersionContext';
+import { DataVersionProvider } from '@/context/DataVersionContext';
 import { initializeDatabase } from '@/db/init';
 import { ThemeProvider } from '@/theme/ThemeContext';
 import { Stack } from 'expo-router';
@@ -16,7 +16,7 @@ export default function RootLayout() {
         initializeDatabase()
             .then(() => setDbReady(true))
             .catch((e) =>
-                setDbError(e instanceof Error ? e.message : 'DB error'),
+                setDbError(e instanceof Error ? e.message : 'DB error')
             );
     }, []);
 
@@ -53,9 +53,9 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <ThemeProvider>
-                    <ExercisesVersionProvider>
+                    <DataVersionProvider>
                         <Stack screenOptions={{ headerShown: false }} />
-                    </ExercisesVersionProvider>
+                    </DataVersionProvider>
                 </ThemeProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

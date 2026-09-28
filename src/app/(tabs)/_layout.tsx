@@ -1,3 +1,4 @@
+//src/app/(tabs)/_layout.tsx
 import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
 import { useTheme } from '@/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';

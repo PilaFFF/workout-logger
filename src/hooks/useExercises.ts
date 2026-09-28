@@ -1,5 +1,6 @@
 // src/hooks/useExercises.ts
-import { useExercisesVersion } from '@/context/ExercisesVersionContext';
+
+import { useDataVersion } from '@/context/DataVersionContext';
 import * as ExerciseRepo from '@/db/exercises';
 import type {
     CreateExerciseInput,
@@ -9,7 +10,7 @@ import type {
 import { useCallback, useEffect, useState } from 'react';
 
 export function useExercises() {
-    const { revision, bump } = useExercisesVersion();
+    const { exercisesRevision, bumpExercises } = useDataVersion();
     const [exercises, setExercises] = useState<Exercise[]>([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
@@ -34,30 +35,30 @@ export function useExercises() {
     // Перезапрос при изменении поиска ИЛИ revision (кто-то мутировал БД)
     useEffect(() => {
         load();
-    }, [load, revision]);
+    }, [load, exercisesRevision]);
 
     const create = useCallback(
         (input: CreateExerciseInput) => {
             ExerciseRepo.createExercise(input);
-            bump(); // ← сигнал всем useExercises перечитать
+            bumpExercises();
         },
-        [bump],
+        [bumpExercises]
     );
 
     const update = useCallback(
         (input: UpdateExerciseInput) => {
             ExerciseRepo.updateExercise(input);
-            bump();
+            bumpExercises();
         },
-        [bump],
+        [bumpExercises]
     );
 
     const remove = useCallback(
         (id: number) => {
             ExerciseRepo.deleteExercise(id);
-            bump();
+            bumpExercises();
         },
-        [bump],
+        [bumpExercises]
     );
 
     return {

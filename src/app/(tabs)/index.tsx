@@ -1,7 +1,15 @@
 // src/app/(tabs)/index.tsx
 import { ExerciseSquare } from '@/components/ExerciseSquare/ExerciseSquare';
+import { FinishFab } from '@/components/FinishFab/FinishFab';
+import {
+    FinishWorkoutSheet,
+    type FinishWorkoutData,
+    type FinishWorkoutSheetRef,
+} from '@/components/FinishWorkoutSheet/FinishWorkoutSheet';
 import { SetsSheet, type SetsSheetRef } from '@/components/SetsSheet/SetsSheet';
 import { WorkoutDropZone } from '@/components/WorkoutDropZone/WorkoutDropZone';
+import { useDataVersion } from '@/context/DataVersionContext';
+import * as WorkoutRepo from '@/db/workouts';
 import { useDragDrop } from '@/hooks/useDragDrop';
 import { useExercises } from '@/hooks/useExercises';
 import { useWorkoutDraft } from '@/hooks/useWorkoutDraft';
@@ -11,52 +19,86 @@ import { resolveDraft, type ResolvedDraftExercise } from '@/utils/resolveDraft';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo, useRef } from 'react';
 import {
-    Animated,
+    Alert,
     ScrollView,
     StyleSheet,
+    Text,
     TextInput,
     View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 export default function WorkoutScreen() {
     const colors = useTheme();
     const { exercises, search, setSearch } = useExercises();
     const draft = useWorkoutDraft();
+    const { bumpWorkouts } = useDataVersion();
     const sheetRef = useRef<SetsSheetRef>(null);
+    const finishRef = useRef<FinishWorkoutSheetRef>(null);
 
     const resolvedDraft = useMemo(
         () => resolveDraft(draft.draft, exercises),
-        [draft.draft, exercises],
+        [draft.draft, exercises]
     );
-
-    const openSheet = useCallback((exerciseId: number) => {
-        sheetRef.current?.open(exerciseId);
-    }, []);
 
     const addAndOpen = useCallback(
         (exerciseId: number) => {
             draft.addExercise(exerciseId);
-            openSheet(exerciseId);
+            sheetRef.current?.open(exerciseId);
         },
-        [draft, openSheet],
+        [draft]
     );
 
-    // Паттерн «долгое нажатие + перетаскивание»:
-    // onLongPress квадратика вызывает startDrag → dragging != null.
-    // Со следующим движением пальца PanResponder на корне заберёт жест
-    // и будет двигать призрак до отпускания.
     const dnd = useDragDrop<Exercise>({
         onDrop: (exercise) => addAndOpen(exercise.id),
     });
 
     const handlePress = useCallback(
         (exercise: Exercise) => addAndOpen(exercise.id),
-        [addAndOpen],
+        [addAndOpen]
     );
 
-    const handleCardPress = useCallback(
-        (exercise: ResolvedDraftExercise) => openSheet(exercise.exercise_id),
-        [openSheet],
+    const handleCardPress = useCallback((exercise: ResolvedDraftExercise) => {
+        sheetRef.current?.open(exercise.exercise_id);
+    }, []);
+
+    const handleFinishPress = useCallback(() => {
+        if (draft.draft.length === 0) {
+            Alert.alert(
+                'Пусто',
+                'Добавь хотя бы одно упражнение, прежде чем завершить тренировку'
+            );
+            return;
+        }
+        finishRef.current?.open();
+    }, [draft.draft.length]);
+
+    const handleFinishConfirm = useCallback(
+        (data: FinishWorkoutData) => {
+            try {
+                WorkoutRepo.createWorkout({
+                    name: data.name,
+                    date: data.date,
+                    comment: data.comment,
+                    exercises: draft.draft.map((d) => ({
+                        exercise_id: d.exercise_id,
+                        sets: d.sets.map((s) => ({
+                            reps: s.reps,
+                            weight: s.weight,
+                        })),
+                    })),
+                });
+                draft.reset();
+                bumpWorkouts();
+                Alert.alert('Готово', 'Тренировка сохранена в истории');
+            } catch (e) {
+                Alert.alert(
+                    'Ошибка',
+                    e instanceof Error ? e.message : 'Не удалось сохранить'
+                );
+            }
+        },
+        [draft, bumpWorkouts]
     );
 
     const isDragging = dnd.dragging !== null;
@@ -64,9 +106,7 @@ export default function WorkoutScreen() {
     return (
         <View
             style={[styles.container, { backgroundColor: colors.background }]}
-            {...dnd.panHandlers}
         >
-            {/* Поиск */}
             <View
                 style={[
                     styles.searchRow,
@@ -90,7 +130,6 @@ export default function WorkoutScreen() {
                 />
             </View>
 
-            {/* Горизонтальные квадратики */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -103,13 +142,15 @@ export default function WorkoutScreen() {
                         exercise={ex}
                         colors={colors}
                         onPress={handlePress}
-                        onLongPressStart={dnd.startDrag}
+                        onDragStart={dnd.startDrag}
+                        onDragMove={dnd.moveDrag}
+                        onDragEnd={dnd.endDrag}
+                        onDragCancel={dnd.cancelDrag}
                         isBeingDragged={dnd.dragging?.id === ex.id}
                     />
                 ))}
             </ScrollView>
 
-            {/* Drop-зона */}
             <WorkoutDropZone
                 draft={resolvedDraft}
                 colors={colors}
@@ -119,32 +160,31 @@ export default function WorkoutScreen() {
                 onCardRemove={draft.removeExercise}
             />
 
-            {/* Призрак перетаскиваемого квадратика.
-                pointerEvents="none" — критично: жесты обрабатывает PanResponder на корне,
-                призрак не должен перехватывать касания. */}
+            {/* Призрак — рендерится поверх всего экрана, следит за пальцем через shared values */}
             {dnd.dragging && (
                 <Animated.View
                     pointerEvents="none"
-                    style={[
-                        styles.ghost,
-                        {
-                            transform: [
-                                { translateX: dnd.ghostPosition.x },
-                                { translateY: dnd.ghostPosition.y },
-                            ],
-                        },
-                    ]}
+                    style={[styles.ghost, dnd.ghostStyle]}
                 >
-                    <ExerciseSquare
-                        exercise={dnd.dragging}
-                        colors={colors}
-                        onPress={() => {}}
-                        onLongPressStart={() => {}}
-                    />
+                    <View
+                        style={[
+                            styles.ghostSquare,
+                            { backgroundColor: dnd.dragging.color },
+                        ]}
+                    >
+                        <Text numberOfLines={2} style={styles.ghostLabel}>
+                            {dnd.dragging.name}
+                        </Text>
+                    </View>
                 </Animated.View>
             )}
 
-            {/* Sheet — принимает draft пропом, чтобы всегда видеть актуальные данные */}
+            <FinishFab
+                colors={colors}
+                onPress={handleFinishPress}
+                disabled={draft.draft.length === 0}
+            />
+
             <SetsSheet
                 ref={sheetRef}
                 colors={colors}
@@ -152,6 +192,13 @@ export default function WorkoutScreen() {
                 onAddSet={draft.addSet}
                 onUpdateSet={draft.updateSet}
                 onRemoveSet={draft.removeSet}
+            />
+
+            <FinishWorkoutSheet
+                ref={finishRef}
+                colors={colors}
+                exerciseCount={draft.draft.length}
+                onConfirm={handleFinishConfirm}
             />
         </View>
     );
@@ -171,5 +218,27 @@ const styles = StyleSheet.create({
     },
     searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
     squaresRow: { paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
-    ghost: { position: 'absolute', left: 0, top: 0, zIndex: 999 },
+    ghost: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        zIndex: 999,
+    },
+    ghostSquare: {
+        width: 96,
+        height: 96,
+        borderRadius: 16,
+        padding: 10,
+        justifyContent: 'flex-end',
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 8,
+    },
+    ghostLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#151517',
+    },
 });

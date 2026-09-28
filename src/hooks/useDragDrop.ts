@@ -1,6 +1,6 @@
 // src/hooks/useDragDrop.ts
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 export interface DropZoneBounds {
     x: number;
@@ -9,118 +9,89 @@ export interface DropZoneBounds {
     height: number;
 }
 
-interface Options<T> {
+interface Options<T extends { id: number }> {
     onDrop: (item: T) => void;
+    ghostOffset?: { x: number; y: number };
 }
 
-export function useDragDrop<T>({ onDrop }: Options<T>) {
+export function useDragDrop<T extends { id: number }>({
+    onDrop,
+    ghostOffset = { x: 48, y: 48 },
+}: Options<T>) {
     const [dragging, setDragging] = useState<T | null>(null);
-    const ghostPosition = useRef(new Animated.ValueXY()).current;
-    const dropZoneBounds = useRef<DropZoneBounds | null>(null);
 
-    // Начальная позиция квадратика (его левый верхний угол на экране)
-    const originRef = useRef({ x: 0, y: 0 });
-    // Начальная позиция пальца при long press
-    const fingerStartRef = useRef({ x: 0, y: 0 });
-
+    // Ref — актуальный dragging для колбэков, которые «застывают» на первом рендере
     const draggingRef = useRef<T | null>(null);
+
+    // Ref — актуальный onDrop (родитель может передавать новую функцию)
     const onDropRef = useRef(onDrop);
     onDropRef.current = onDrop;
 
-    const registerDropZone = useCallback((bounds: DropZoneBounds) => {
-        dropZoneBounds.current = bounds;
-    }, []);
+    const ghostX = useSharedValue(0);
+    const ghostY = useSharedValue(0);
+    const dropZoneBounds = useSharedValue<DropZoneBounds | null>(null);
 
-    /**
-     * @param item — перетаскиваемый элемент
-     * @param squareLayout — { x, y } левого верхнего угла квадратика в координатах экрана
-     * @param fingerPageX — pageX пальца в момент long press
-     * @param fingerPageY — pageY пальца в момент long press
-     */
     const startDrag = useCallback(
-        (
-            item: T,
-            squareLayout: { x: number; y: number },
-            fingerPageX: number,
-            fingerPageY: number,
-        ) => {
+        (item: T, pageX: number, pageY: number) => {
             draggingRef.current = item;
             setDragging(item);
-
-            originRef.current = squareLayout;
-            fingerStartRef.current = { x: fingerPageX, y: fingerPageY };
-
-            // Призрак появляется ТОЧНО на месте оригинала
-            ghostPosition.setValue(squareLayout);
+            ghostX.value = pageX - ghostOffset.x;
+            ghostY.value = pageY - ghostOffset.y;
         },
-        [ghostPosition],
+        [ghostX, ghostY, ghostOffset.x, ghostOffset.y]
+    );
+
+    const moveDrag = useCallback(
+        (pageX: number, pageY: number) => {
+            ghostX.value = pageX - ghostOffset.x;
+            ghostY.value = pageY - ghostOffset.y;
+        },
+        [ghostX, ghostY, ghostOffset.x, ghostOffset.y]
+    );
+
+    const endDrag = useCallback(
+        (pageX: number, pageY: number) => {
+            const bounds = dropZoneBounds.value;
+            const item = draggingRef.current;
+
+            if (item && bounds) {
+                const inside =
+                    pageX >= bounds.x &&
+                    pageX <= bounds.x + bounds.width &&
+                    pageY >= bounds.y &&
+                    pageY <= bounds.y + bounds.height;
+
+                if (inside) onDropRef.current(item);
+            }
+
+            draggingRef.current = null;
+            setDragging(null);
+        },
+        [dropZoneBounds]
     );
 
     const cancelDrag = useCallback(() => {
         draggingRef.current = null;
         setDragging(null);
-        ghostPosition.setValue({ x: 0, y: 0 });
-    }, [ghostPosition]);
+    }, []);
 
-    const finishDrag = useCallback(
-        (moveX: number, moveY: number) => {
-            const item = draggingRef.current;
-            const bounds = dropZoneBounds.current;
-
-            if (item && bounds) {
-                const inside =
-                    moveX >= bounds.x &&
-                    moveX <= bounds.x + bounds.width &&
-                    moveY >= bounds.y &&
-                    moveY <= bounds.y + bounds.height;
-
-                if (inside) onDropRef.current(item);
-            }
-            cancelDrag();
+    const registerDropZone = useCallback(
+        (bounds: DropZoneBounds) => {
+            dropZoneBounds.value = bounds;
         },
-        [cancelDrag],
+        [dropZoneBounds]
     );
 
-    const panResponder = useMemo(
-        () =>
-            PanResponder.create({
-                onStartShouldSetPanResponder: () => false,
-                onMoveShouldSetPanResponder: () => draggingRef.current !== null,
-                onMoveShouldSetPanResponderCapture: () =>
-                    draggingRef.current !== null,
-
-                onPanResponderMove: (_, gesture) => {
-                    // Смещение пальца относительно начальной точки
-                    const dx = gesture.moveX - fingerStartRef.current.x;
-                    const dy = gesture.moveY - fingerStartRef.current.y;
-
-                    // Призрак двигается от исходной позиции квадратика
-                    ghostPosition.setValue({
-                        x: originRef.current.x + dx,
-                        y: originRef.current.y + dy,
-                    });
-                },
-
-                onPanResponderRelease: (_, gesture) => {
-                    finishDrag(gesture.moveX, gesture.moveY);
-                },
-
-                onPanResponderTerminate: (_, gesture) => {
-                    finishDrag(gesture.moveX, gesture.moveY);
-                },
-
-                onPanResponderTerminationRequest: () => false,
-                onShouldBlockNativeResponder: () =>
-                    draggingRef.current !== null,
-            }),
-        [ghostPosition, finishDrag],
-    );
+    const ghostStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: ghostX.value }, { translateY: ghostY.value }],
+    }));
 
     return {
         dragging,
-        ghostPosition,
-        panHandlers: panResponder.panHandlers,
+        ghostStyle,
         startDrag,
+        moveDrag,
+        endDrag,
         cancelDrag,
         registerDropZone,
     };

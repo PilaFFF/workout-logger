@@ -3,19 +3,19 @@ import { EXERCISE_TYPE_ICONS } from '@/constants/exerciseIcons';
 import type { ThemeColors } from '@/theme/colors';
 import type { Exercise } from '@/types/exercise';
 import { Ionicons } from '@expo/vector-icons';
-import { useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
 interface Props {
     exercise: Exercise;
     colors: ThemeColors;
     onPress: (exercise: Exercise) => void;
-    onLongPressStart: (
-        exercise: Exercise,
-        squareLayout: { x: number; y: number },
-        fingerPageX: number,
-        fingerPageY: number,
-    ) => void;
+    onDragStart: (exercise: Exercise, pageX: number, pageY: number) => void;
+    onDragMove: (pageX: number, pageY: number) => void;
+    onDragEnd: (pageX: number, pageY: number) => void;
+    onDragCancel: () => void;
     isBeingDragged?: boolean;
 }
 
@@ -23,53 +23,83 @@ export function ExerciseSquare({
     exercise,
     colors,
     onPress,
-    onLongPressStart,
+    onDragStart,
+    onDragMove,
+    onDragEnd,
+    onDragCancel,
     isBeingDragged = false,
 }: Props) {
-    const containerRef = useRef<View>(null);
-    const pressStart = useRef({ x: 0, y: 0 });
+    // Refs с актуальными колбэками — gesture создаётся один раз и не видит новые пропсы
+    const onPressRef = useRef(onPress);
+    const onDragStartRef = useRef(onDragStart);
+    const onDragMoveRef = useRef(onDragMove);
+    const onDragEndRef = useRef(onDragEnd);
+    const onDragCancelRef = useRef(onDragCancel);
+    const exerciseRef = useRef(exercise);
+
+    onPressRef.current = onPress;
+    onDragStartRef.current = onDragStart;
+    onDragMoveRef.current = onDragMove;
+    onDragEndRef.current = onDragEnd;
+    onDragCancelRef.current = onDragCancel;
+    exerciseRef.current = exercise;
+
+    const gesture = useMemo(() => {
+        const longPress = Gesture.LongPress()
+            .minDuration(250)
+            .maxDistance(8)
+            .onStart((e) => {
+                runOnJS(onDragStartRef.current)(
+                    exerciseRef.current,
+                    e.absoluteX,
+                    e.absoluteY
+                );
+            });
+
+        const pan = Gesture.Pan()
+            .activateAfterLongPress(250)
+            .onUpdate((e) => {
+                runOnJS(onDragMoveRef.current)(e.absoluteX, e.absoluteY);
+            })
+            .onEnd((e) => {
+                runOnJS(onDragEndRef.current)(e.absoluteX, e.absoluteY);
+            })
+            .onFinalize((_e, success) => {
+                if (!success) runOnJS(onDragCancelRef.current)();
+            });
+
+        const tap = Gesture.Tap()
+            .maxDuration(250)
+            .onEnd((_e, success) => {
+                if (success) runOnJS(onPressRef.current)(exerciseRef.current);
+            });
+
+        return Gesture.Race(Gesture.Exclusive(longPress, pan), tap);
+    }, []); // ← пустой массив зависимостей! gesture создаётся один раз
 
     return (
-        <Pressable
-            ref={containerRef}
-            onPressIn={(e) => {
-                pressStart.current = {
-                    x: e.nativeEvent.pageX,
-                    y: e.nativeEvent.pageY,
-                };
-            }}
-            onPress={() => onPress(exercise)}
-            onLongPress={() => {
-                // Получаем позицию квадратика на экране
-                containerRef.current?.measureInWindow((x, y, width, height) => {
-                    onLongPressStart(
-                        exercise,
-                        { x, y },
-                        pressStart.current.x,
-                        pressStart.current.y,
-                    );
-                });
-            }}
-            delayLongPress={250}
-            style={({ pressed }) => [
-                styles.square,
-                {
-                    backgroundColor: exercise.color,
-                    opacity: isBeingDragged ? 0.3 : pressed ? 0.85 : 1,
-                },
-            ]}
-        >
-            <View style={styles.iconWrap}>
-                <Ionicons
-                    name={EXERCISE_TYPE_ICONS[exercise.type]}
-                    size={22}
-                    color="#151517"
-                />
+        <GestureDetector gesture={gesture}>
+            <View
+                style={[
+                    styles.square,
+                    {
+                        backgroundColor: exercise.color,
+                        opacity: isBeingDragged ? 0.3 : 1,
+                    },
+                ]}
+            >
+                <View style={styles.iconWrap}>
+                    <Ionicons
+                        name={EXERCISE_TYPE_ICONS[exercise.type]}
+                        size={22}
+                        color="#151517"
+                    />
+                </View>
+                <Text numberOfLines={2} style={styles.label}>
+                    {exercise.name}
+                </Text>
             </View>
-            <Text numberOfLines={2} style={styles.label}>
-                {exercise.name}
-            </Text>
-        </Pressable>
+        </GestureDetector>
     );
 }
 

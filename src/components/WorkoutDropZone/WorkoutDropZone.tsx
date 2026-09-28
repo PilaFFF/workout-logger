@@ -1,6 +1,7 @@
 // src/components/WorkoutDropZone/WorkoutDropZone.tsx
+import type { DropZoneBounds } from '@/hooks/useDragDrop';
 import type { ThemeColors } from '@/theme/colors';
-import { ResolvedDraftExercise } from '@/utils/resolveDraft';
+import type { ResolvedDraftExercise } from '@/utils/resolveDraft';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef } from 'react';
 import {
@@ -16,12 +17,7 @@ interface Props {
     draft: ResolvedDraftExercise[];
     colors: ThemeColors;
     isDragActive: boolean;
-    onDropZoneLayout: (layout: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-    }) => void;
+    onDropZoneLayout: (bounds: DropZoneBounds) => void;
     onCardPress: (exercise: ResolvedDraftExercise) => void;
     onCardRemove: (exerciseId: number) => void;
 }
@@ -38,11 +34,13 @@ export function WorkoutDropZone({
 
     const handleLayout = useCallback(
         (_: LayoutChangeEvent) => {
+            // measureInWindow даёт абсолютные координаты в системе экрана —
+            // именно они совпадают с absoluteX/absoluteY из gesture-handler.
             containerRef.current?.measureInWindow((x, y, width, height) => {
                 onDropZoneLayout({ x, y, width, height });
             });
         },
-        [onDropZoneLayout],
+        [onDropZoneLayout]
     );
 
     return (
@@ -72,7 +70,7 @@ export function WorkoutDropZone({
             )}
 
             {draft.length === 0 ? (
-                <View style={styles.empty}>
+                <View style={styles.empty} pointerEvents="none">
                     <Ionicons
                         name="fitness-outline"
                         size={40}
@@ -150,6 +148,6 @@ const styles = StyleSheet.create({
     },
     list: {
         padding: 12,
-        paddingTop: 44, // отступ под подсказку
+        paddingTop: 44,
     },
 });
